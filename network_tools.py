@@ -1,5 +1,6 @@
 # Standard Lib
 import socket, struct, os, pickle, sys, time, json
+from ipaddress import ip_network, ip_address
 
 # 3rd Party
 import requests
@@ -11,9 +12,17 @@ class BaseConnection():
 
     suppress_output = False
     identifier = ""
-    port = 10000
     wait = 1
     timeout = wait
+    port = 10000
+    blocking = False
+    buffer_size = 4096
+
+    try:
+        host = socket.gethostbyname(socket.gethostname())
+    except socket.gaierror:
+        host = socket.gethostbyname('localhost')
+
 
     def __init__(self, *args, **kwargs):
 
@@ -22,20 +31,23 @@ class BaseConnection():
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+    def host_in_range(self, ip_address, mask):
+
+        ip_range = ip_network(mask)
+        return ip_address(ip_address) in ip_range
+
+
 
 class TCPServer(BaseConnection):
 
-    try:
-        host = socket.gethostbyname(socket.gethostname())
-    except socket.gaierror:
-        host = socket.gethostbyname('localhost')
-
     max_connections = 10
-    blocking = True
     identifier = "Unnamed server"
+    ack = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.timeout = self.wait
 
         try:
             # Instantiate the socket
@@ -61,7 +73,7 @@ class TCPServer(BaseConnection):
             data = []
 
             while True:
-                packet = connection.recv(4096)  # TODO: Known Issue. This fails if the packet is larger that 4096 bytes
+                packet = connection.recv(self.buffer_size)  # TODO: Known Issue. This fails if the packet is larger that 4096 bytes
                 if not packet:
                     break
                 data.append(packet)
@@ -69,10 +81,14 @@ class TCPServer(BaseConnection):
             if unpickle_data:
                 data = pickle.loads(b"".join(data))
 
+            print("HERE:", data, self.ack)
+            if self.ack: # If the user has set a default response
+                self.socket.send(self.ack)
+
             if not self.suppress_output:
                 print("{}{} Received: {}{}".format(settings.GREEN, self.identifier, str(data)[:30], settings.NORMAL))
 
-            return data, address
+            return address, data
 
         except socket.error:
             return None, None
@@ -81,62 +97,71 @@ class TCPServer(BaseConnection):
             if not self.blocking:
                 time.sleep(self.wait)
 
+    def __del__(self):
+
+        # Close the socket so resources are not left open after the program terminates
+        self.socket.close()
 
 class TCPClient(BaseConnection):
+
+    identifier = "Unnamed client"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if 'host' not in kwargs.keys():
-            raise InitialisationException("{}host is not set{}".format(settings.RED, settings.NORMAL))
-        if 'port' not in kwargs.keys():
-            raise InitialisationException("{}port is not set{}".format(settings.RED, settings.NORMAL))
+        # if 'port' not in kwargs.keys():
+        #     raise InitialisationException("{}No Port set for TCP Client '{}'{}".format(settings.RED, self.identifier, settings.NORMAL))
 
-        identifier = "Unnamed client"
+        self.timeout = self.wait
 
     def send(self, data, pickle_data=False):
 
         if pickle_data:
             data = pickle.dumps(data)
+        else:
+            data = bytearray(data, encoding='utf-8')
 
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.settimeout(self.wait)
             self.socket.connect((self.host, self.port))
             self.socket.send(data)
+            response = self.socket.recv(self.buffer_size)
             self.socket.close()
-            return True
+
+            return True, response
 
         except socket.timeout:
-            print('{}{} timed out...{}'.format(settings.RED, self.identifier, settings.NORMAL))
-            return False
-
-        except OSError as e:
-            print('{}ERROR: {}{}'.format(settings.RED, e, settings.NORMAL))
-            return False
+            if not self.suppress_output:
+                print('{}{} timed out...{}'.format(settings.RED, self.identifier, settings.NORMAL))
+            return False, None
 
         finally:
             self.socket.close()
 
-class MulticastServer():
 
-    def __init__(self, **kwargs):
+class MulticastServer(BaseConnection):
 
-        super(MulticastServer,).__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Check if host was a valid multicast address
+        if self.host_in_range(self.host, "224.0.0.0/4"):
+            raise InvalidAddressException("Please choose an address in the range 224.0.0.0/4.")
 
         try:
             # Look up multicast group address in name server and find out IP version
-            addrinfo = socket.getaddrinfo(settings.IPV4_HOST, None)[0]
+            addrinfo = socket.getaddrinfo(self.host, None)[0]
 
             # Create a socket
             self.server_socket = socket.socket(addrinfo[0], socket.SOCK_DGRAM)
-            self.server_socket.setblocking(False)
+            self.server_socket.setblocking(self.blocking)
             # Allow multiple copies of this program on one machine
             # (not strictly needed)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
             # Bind it to the port
-            self.server_socket.bind(('', settings.MULTICAST_SERVER_PORT))
+            self.server_socket.bind((self.host, self.port))
 
             group_bin = socket.inet_pton(addrinfo[0], addrinfo[4][0])
             # Join MultiCast group
@@ -146,23 +171,23 @@ class MulticastServer():
             else:  # IPV6
                 mreq = group_bin + struct.pack('@I', 0)
                 self.server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP, mreq)
-            print("Multicast server opened on: " + str(settings.MULTICAST_SERVER_PORT))
+            print("{}Multicast server opened on {}:{}{}".format(settings.GREEN, self.host, self.port, settings.NORMAL))
         except OSError:
-            print("No Internet connection")
-            print("Could not start Multicast Server")
-            print("TODO: Give the user a retry button that restarts the MultiCast Server")
+            print("{}No Internet connection.{}".format(settings.RED, settings.NORMAL))
 
-    def check_for_data(self):
+
+    def listen(self, unpickle_data=False):
 
         try:
-            data, sender = self.server_socket.recvfrom(1500)
+            data, sender = self.server_socket.recvfrom(4096)
 
             while data[-1:] == '\0':
                 data = data[:-1]  # Strip trailing \0's
-            query_object = pickle.loads(data)
-            # query_object.addr = sender
-            # print("Got: " + str(query_object) + " from: " + str(sender))
-            return query_object, sender
+
+            if unpickle_data:
+                data = pickle.loads(data)
+
+            return address, data
 
         except socket.error:
             return None, None
@@ -170,25 +195,28 @@ class MulticastServer():
 
 class MulticastClient():
 
-    def send(self, data):
-        addrinfo = socket.getaddrinfo(settings.IPV4_HOST, None)[0]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        server_socket = socket.socket(addrinfo[0], socket.SOCK_DGRAM)
+    def send(self, data):
+
+        addrinfo = socket.getaddrinfo(self.host, None)[0]
+        self.socket = socket.socket(addrinfo[0], socket.SOCK_DGRAM)
 
         # Set Time-to-live (optional)
-        ttl_bin = struct.pack('@i', settings.MULTICAST_TTL)
+        ttl_bin = struct.pack('@i', self.wait)
         if addrinfo[0] == socket.AF_INET:  # IPv4
-            server_socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl_bin)
+            socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl_bin)
             sock_type = socket.IPPROTO_IP
-        else:
-            server_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_MULTICAST_HOPS, ttl_bin)
+        else: # IPv6
+            socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_MULTICAST_HOPS, ttl_bin)
             sock_type = socket.IPPROTO_IPV6
 
-        # if not settings.LOCAL_DEBUG:  # Ignore packets sent from self
-        #     server_socket.setsockopt(sock_type, socket.IP_MULTICAST_LOOP, 0)
+        # Ignore packets sent from self TODO: make this an option
+        socket.setsockopt(sock_type, socket.IP_MULTICAST_LOOP, 0)
 
-        server_socket.sendto(pickle.dumps(data), (addrinfo[4][0], settings.MULTICAST_SERVER_PORT))
-        print("Multicast query sent for: " + str(data))
+        socket.sendto(pickle.dumps(data), (addrinfo[4][0], self.port))
+        print("Multicast query sent for: ()".format(data))
 
 
 class HTTPRequest():
@@ -387,4 +415,7 @@ class FTPClient():
     Exceptions
 """
 class InitialisationException(BaseException):
+    pass
+
+class InvalidAddressException(BaseException):
     pass
