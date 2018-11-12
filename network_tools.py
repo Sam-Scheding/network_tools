@@ -1,6 +1,6 @@
 # Standard Lib
 import socket, struct, os, sys, time
-import pickle as pickl
+import pickle
 from ipaddress import ip_network, ip_address
 
 # 3rd Party
@@ -60,7 +60,7 @@ class _BaseConnection():
         if not encoding:
             return data
         if encoding == JSON:
-            data = pickl.loads(b''.join(data))
+            data = pickle.loads(b''.join(data))
         elif encoding == TEXT:
             data = str(data)
         return data
@@ -360,7 +360,7 @@ class MulticastServer(_BaseServer):
             while data[-1:] == '\0':
                 data = data[:-1]  # Strip trailing \0's
 
-            if unpickle_data:
+            if encoding:
                 data = self.decode(data)
 
             return address, data
