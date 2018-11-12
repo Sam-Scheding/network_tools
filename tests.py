@@ -14,8 +14,7 @@ class TestNetworkTools(unittest.TestCase):
         self.assertEqual(client.timeout, client.wait)
         self.assertEqual(client.port, 10000)
         self.assertEqual(client.port, 10000)
-        success, response = client.send('asfsf')
-        print(response)
+
 
     def test_tcp_server(self):
 
@@ -26,13 +25,40 @@ class TestNetworkTools(unittest.TestCase):
         self.assertEqual(server.blocking, False)
         self.assertEqual(server.port, 10000)
 
-        del server
-
         server = net.TCPServer(blocking=False, wait=3, port=12345, suppress_output=True)
-        self.assertEqual(server.identifier, 'Unnamed server')
+        self.assertEqual(server.identifier, 'Anonymous Server')
         self.assertEqual(server.port, 12345)
         self.assertEqual(server.wait, 3)
         self.assertEqual(server.timeout, server.wait)
+
+        # Test negative wait time
+
+        kwargs = { 'wait': -1, 'suppress_output': True, }
+        server = net.TCPServer(**kwargs)
+        self.assertRaises(ValueError, server.listen)
+
+        # Test negative max_connections
+        args = []
+        kwargs = { 'max_connections': 0, 'suppress_output': True, }
+        server = net.TCPServer(**kwargs)
+        self.assertRaises(ValueError, server.listen)
+
+        # Test ack
+        server = net.TCPServer(ack='bar')
+        self.assertEqual(server.ack, 'bar')
+
+        # Test buffer_size
+        server = net.TCPServer(wait=1)
+        server.buffer_size = -1
+        self.assertRaises(ValueError, server.listen)
+        server.buffer_size = 4097
+        self.assertRaises(ValueError, server.listen)
+        server.buffer_size = 0
+        server.listen()
+
+        # Assert succeeds
+        server.buffer_size = 4096
+        server.listen()
 
 if __name__ == '__main__':
     unittest.main()
