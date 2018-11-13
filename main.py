@@ -14,19 +14,19 @@ def main():
         client = net.UDPClient(port=port)
         client.send("Hello")
 
-    # if sys.argv[1] == '-s':
-    #     server = net.TCPServer(port=port, ack='ACK')
-    #
-    #     while True:
-    #         sender, data = server.listen()
-    #         print(data)
-    #
-    # elif sys.argv[1] == '-c':
-    #
-    #     client = net.TCPClient(port=port)
-    #     response = client.send("Hello")
-    #     print(response)
-    #
+    if sys.argv[1] == '-s':
+        server = net.TCPServer(port=port, ack='ACK')
+
+        while True:
+            sender, data = server.listen()
+            print(data)
+
+    elif sys.argv[1] == '-c':
+
+        client = net.TCPClient(port=port)
+        response = client.send("Hello")
+        print(response)
+
 
 if __name__ == '__main__':
     main()
