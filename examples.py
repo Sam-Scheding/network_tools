@@ -31,7 +31,6 @@ server = net.TCPServer(host="0.0.0.0", port=12345)
 #   - suppress_output <bool>: If True, info and debugging output will not print. Errors are unaffected.
 kwargs = {
     'blocking': False,
-    'wait': 2,
     'identifier': 'My Server',
     'ack': 'bar',
     'buffer_size': 2048,
@@ -41,18 +40,18 @@ server = net.TCPServer(**kwargs)
 
 
 # Blocking example
-server = net.TCPServer(blocking=True)
-address, data = server.listen()
-print(data)
+server = net.TCPServer()  # default blocking value is True
+request = server.listen()
+print(request)
 
 # Non-blocking example
-server = net.TCPServer(wait=2)  # default blocking value is False
+server = net.TCPServer(timeout=2)
 
 while True:
 
-    address, data = server.listen()
+    request = server.listen()
 
-    if address or data:
+    if request:
         print(data)
     else:
         print('Still no data')
