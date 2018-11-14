@@ -173,17 +173,15 @@ class TCPServer(_BaseServer):
             if hasattr(self, 'socket'):
                 self.socket.close()
 
-    def listen(self, *args, encoding=None, peek=30, **kwargs):
+    def listen(self, *args, **kwargs):
         """
-            checks for data sent to the server.
-            :param unpickle: Default False. If True, the server deserializes the data before returning it. Useful for sending JSON around.
-            :type unpickle: bool
+            Checks for data sent to the server.
 
             :param peek: Default 30. Choose a preview size for the received packets.
             :type peek: int
         """
         super().listen(*args, **kwargs)
-
+        peek = kwargs.get('peek', None)
         if self.max_connections < 1:
             raise ValueError("max_connections must be at least 1")
 
@@ -195,7 +193,7 @@ class TCPServer(_BaseServer):
             connection.sendall(self.ack.encode()) # ACK the clients message
             data = self.decode(data, encoding)
 
-            if self.peek > 0:
+            if peek:
                 print("{}{} received: {}...{}".format(settings.GREEN, self.identifier, str(data)[:peek], settings.NORMAL))
 
             request = Transmission(content=data, sender=address, receiver=(self.host,self.port))
