@@ -2,7 +2,9 @@
 from __future__ import print_function
 import socket, struct, os, sys, time
 import pickle
-from ipaddress import ip_network, ip_address
+
+# Not available in 2.7
+# from ipaddress import ip_network, ip_address
 # Local Imports
 import settings
 
@@ -401,10 +403,10 @@ class MulticastServer(_BaseServer):
                 self.socket.close()
             raise socket.error('{}{}: {}{}'.format(settings.RED, self.identifier, e, settings.NORMAL))
 
-    def host_in_range(self, ip_address, mask):
-
-        ip_range = ip_network(mask)
-        return ip_address(ip_address) in ip_range
+    # def host_in_range(self, ip_address, mask):
+    #
+    #     ip_range = ip_network(mask)
+    #     return ip_address(ip_address) in ip_range
 
     class InvalidAddressException(BaseException):
         pass
