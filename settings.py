@@ -1,7 +1,4 @@
-import socket, os
-from uuid import getnode as get_mac
-from urllib import parse as urlparse
-from datetime import timedelta
+import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEBUG = True
