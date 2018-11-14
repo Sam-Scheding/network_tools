@@ -6,11 +6,6 @@ from ipaddress import ip_network, ip_address
 # Local Imports
 import settings
 
-TEXT = 1
-HTML = 2
-JSON = 3
-XML = 4
-
 class Transmission():
     """
         Successful connections will return a Transmission object. To print the content, simply print the Transmission object.
@@ -37,6 +32,9 @@ class Transmission():
 
     def __str__(self):
         return self.content
+
+    def __repr__(self):
+        return str(self.content)
 
 class _BaseConnection():
 
