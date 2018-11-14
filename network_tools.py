@@ -182,6 +182,8 @@ class TCPServer(_BaseServer):
         """
         super().listen(*args, **kwargs)
         peek = kwargs.get('peek', None)
+        encoding = kwargs.get('encoding', None)
+
         if self.max_connections < 1:
             raise ValueError("max_connections must be at least 1")
 
