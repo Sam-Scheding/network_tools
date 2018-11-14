@@ -227,10 +227,12 @@ class TCPClient(_BaseClient):
         super().__init__(*args, **kwargs)
 
 
-    def send(self, data, encoding=None):
+    def send(self, data, *args, **kwargs):
         """
             :param data: The data to send
         """
+        encoding = kwargs.get('encoding', None)
+
         data = self.encode(data, encoding)
         response = []
 
@@ -377,7 +379,10 @@ class MulticastServer(_BaseServer):
             raise OSError("{}{} {}{}".format(settings.RED, self.identifier, e, settings.NORMAL))
 
 
-    def listen(self, encoding=None):
+    def listen(self, *args, **kwargs):
+        super().listen(*args, **kwargs)
+
+        encoding = kwargs.get('encoding', None)
 
         try:
             data, sender = self.socket.recvfrom(self.buffer_size)
@@ -386,7 +391,7 @@ class MulticastServer(_BaseServer):
                 data = data[:-1]  # Strip trailing \0's
 
             if encoding:
-                data = self.decode(data)
+                data = self.decode(data, encoding)
 
             request = Transmission(content=data, sender=sender, receiver=(self.host, self.port))
             return request
